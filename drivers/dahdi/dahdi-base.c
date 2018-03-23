@@ -2014,6 +2014,9 @@ static int dahdi_net_open(struct net_device *dev)
 	fasthdlc_init(&ms->txhdlc, (ms->flags & DAHDI_FLAG_HDLC56) ? FASTHDLC_MODE_56 : FASTHDLC_MODE_64);
 	ms->infcs = PPP_INITFCS;
 
+	if (ms->flags & DAHDI_FLAG_NOSTDTXRX && ms->span->ops->open != NULL)
+		(void) ms->span->ops->open(ms);
+
 	netif_start_queue(chan_to_netdev(ms));
 
 	if ((ms->chan_alarms & DAHDI_ALARM_LOS) == 0)
@@ -2057,6 +2060,10 @@ static int dahdi_net_stop(struct net_device *dev)
 	}
 	/* Not much to do here.  Just deallocate the buffers */
 	netif_stop_queue(chan_to_netdev(ms));
+
+	if (ms->flags & DAHDI_FLAG_NOSTDTXRX && ms->span->ops->close != NULL)
+		(void) ms->span->ops->close(ms);
+
 	dahdi_reallocbufs(ms, 0, 0);
 	hdlc_close(dev);
 	return 0;
@@ -2156,10 +2163,17 @@ static int dahdi_xmit(struct sk_buff *skb, struct net_device *dev)
 		stats->tx_bytes += ss->writen[oldbuf];
 		print_debug_writebuf(ss, skb, oldbuf);
 		retval = 0;
-		/* Free the SKB */
-		dev_kfree_skb_any(skb);
 	}
 	spin_unlock_irqrestore(&ss->lock, flags);
+
+	if (retval == 0) {
+		dev_kfree_skb_any(skb);
+
+		if (ss->flags & DAHDI_FLAG_NOSTDTXRX &&
+		    ss->span->ops->hdlc_hard_xmit != NULL)
+				ss->span->ops->hdlc_hard_xmit(ss);
+	}
+
 	return retval;
 }
 
@@ -2256,6 +2270,10 @@ static int dahdi_ppp_xmit(struct ppp_channel *ppp, struct sk_buff *skb)
 		/* N.B. this is called in process or BH context so
 		   dev_kfree_skb is OK. */
 		dev_kfree_skb(skb);
+
+		if (ss->flags & DAHDI_FLAG_NOSTDTXRX &&
+		    ss->span->ops->hdlc_hard_xmit != NULL)
+				ss->span->ops->hdlc_hard_xmit(ss);
 	}
 	return retval;
 }
