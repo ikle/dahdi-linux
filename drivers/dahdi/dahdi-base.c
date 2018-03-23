@@ -2123,10 +2123,15 @@ static int dahdi_xmit(struct sk_buff *skb, struct net_device *dev)
 		ss->writeidx[ss->inwritebuf] = 0;
 		/* Calculate the FCS */
 		fcs = PPP_INITFCS;
-		for (x=0;x<skb->len;x++)
-			fcs = PPP_FCS(fcs, data[x]);
-		/* Invert it */
-		fcs ^= 0xffff;
+
+		if (ss->flags & DAHDI_FLAG_FCS) {
+			for (x = 0; x < skb->len; ++x)
+				fcs = PPP_FCS(fcs, data[x]);
+
+			/* Invert it */
+			fcs ^= 0xffff;
+		}
+
 		/* Send it out LSB first */
 		data[ss->writen[ss->inwritebuf]++] = (fcs & 0xff);
 		data[ss->writen[ss->inwritebuf]++] = (fcs >> 8) & 0xff;
@@ -2210,10 +2215,14 @@ static int dahdi_ppp_xmit(struct ppp_channel *ppp, struct sk_buff *skb)
 
 		/* Calculate the FCS */
 		fcs = PPP_INITFCS;
-		for (x=0;x<skb->len + 2;x++)
-			fcs = PPP_FCS(fcs, data[x]);
-		/* Invert it */
-		fcs ^= 0xffff;
+
+		if (ss->flags & DAHDI_FLAG_FCS) {
+			for (x = 0; x < skb->len + 2; ++x)
+				fcs = PPP_FCS(fcs, data[x]);
+
+			/* Invert it */
+			fcs ^= 0xffff;
+		}
 
 		/* Point past the real data now */
 		data += (skb->len + 2);
