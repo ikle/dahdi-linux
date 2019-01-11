@@ -2140,7 +2140,8 @@ static int dahdi_xmit(struct sk_buff *skb, struct net_device *dev)
 			   some space for us */
 			ss->outwritebuf = oldbuf;
 		}
-		dev->trans_start = jiffies;
+
+		netif_trans_update(dev);
 		stats->tx_packets++;
 		stats->tx_bytes += ss->writen[oldbuf];
 		print_debug_writebuf(ss, skb, oldbuf);

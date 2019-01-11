@@ -1419,6 +1419,13 @@ timer_setup(struct timer_list *timer,
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 10, 0)
 #define dahdi_ktime_equal ktime_equal
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 7, 0)
+
+static inline void netif_trans_update(struct net_device *dev)
+{
+	dev->trans_start = jiffies;
+}
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 0, 0)
 
 #ifdef RHEL_RELEASE_VERSION
@@ -1482,6 +1489,7 @@ static inline void *PDE_DATA(const struct inode *inode)
 #endif /* 3.10.0 */
 #endif /* 3.16.0 */
 #endif /* 4.0.0 */
+#endif /* 4.7.0 */
 #endif /* 4.10.0 */
 #endif /* 4.11.0 */
 #endif /* 4.13.0 */
