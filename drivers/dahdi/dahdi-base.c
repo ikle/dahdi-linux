@@ -2016,6 +2016,11 @@ static int dahdi_net_open(struct net_device *dev)
 
 	netif_start_queue(chan_to_netdev(ms));
 
+	if ((ms->chan_alarms & DAHDI_ALARM_LOS) == 0)
+		netif_carrier_on(dev);
+	else
+		netif_carrier_off(dev);
+
 #ifdef CONFIG_DAHDI_DEBUG
 	module_printk(KERN_NOTICE, "DAHDINET: Opened channel %d name %s\n", ms->channo, ms->name);
 #endif
@@ -3879,8 +3884,19 @@ static int dahdi_release(struct inode *inode, struct file *file)
 void dahdi_alarm_channel(struct dahdi_chan *chan, int alarms)
 {
 	unsigned long flags;
+	struct net_device *dev;
 
 	spin_lock_irqsave(&chan->lock, flags);
+
+	if (dahdi_have_netdev(chan)) {
+		dev = chan_to_netdev(chan);
+
+		if ((alarms & DAHDI_ALARM_LOS) == 0)
+			netif_carrier_on(dev);
+		else
+			netif_carrier_off(dev);
+	}
+
 	if (chan->chan_alarms != alarms) {
 		chan->chan_alarms = alarms;
 		dahdi_qevent_nolock(chan, alarms ? DAHDI_EVENT_ALARM : DAHDI_EVENT_NOALARM);
