@@ -149,12 +149,14 @@ static int altab[] = {
 #define FLAG_EXPRESS (1 << 9)
 #define FLAG_5THGEN  (1 << 10)
 #define FLAG_8PORT  (1 << 11)
+#define FLAG_1PORT  (1 << 15)
 
 #define CANARY 0xc0de
 
 /* names of available HWEC modules */
 #ifdef VPM_SUPPORT
 #define T4_VPM_PRESENT (1 << 28)
+static const char *vpmoct032_name = "VPMOCT032";
 static const char *vpmoct064_name = "VPMOCT064";
 static const char *vpmoct128_name = "VPMOCT128";
 static const char *vpmoct256_name = "VPMOCT256";
@@ -188,6 +190,8 @@ static struct devtype wct210p4 = { "Wildcard TE210P (4th Gen)", FLAG_BURST | FLA
 static struct devtype wct210p3 = { "Wildcard TE210P (3rd Gen)", FLAG_2NDGEN | FLAG_3RDGEN | FLAG_2PORT };
 static struct devtype wct205 = { "Wildcard TE205P ", FLAG_2NDGEN | FLAG_2PORT };
 static struct devtype wct210 = { "Wildcard TE210P ", FLAG_2NDGEN | FLAG_2PORT };
+static struct devtype opvxd115p2 = { "OpenVox D115P/D115E Single-port E1/T1 card (2nd GEN))", FLAG_2NDGEN | FLAG_1PORT};
+static struct devtype opvxd130p5 = { "OpenVox D130P/D130E Single-port E1/T1 card (3rd GEN)", FLAG_5THGEN | FLAG_BURST | FLAG_2NDGEN | FLAG_3RDGEN | FLAG_1PORT};
 	
 
 struct t4;
@@ -1008,6 +1012,8 @@ unsigned int oct_get_reg(void *data, unsigned int reg)
 static const char *__t4_echocan_name(struct t4 *wc)
 {
 	if (wc->vpm) {
+		if (wc->numspans == 1)
+			return vpmoct032_name;
 		if (wc->numspans == 2)
 			return vpmoct064_name;
 		else if (wc->numspans == 4)
@@ -1546,7 +1552,10 @@ static int t4_shutdown(struct dahdi_span *span)
 				||
 	    ((wc->numspans == 2) &&
 	    (!(wc->tspans[0]->span.flags & DAHDI_FLAG_RUNNING)) &&
-	    (!(wc->tspans[1]->span.flags & DAHDI_FLAG_RUNNING)))) {
+	    (!(wc->tspans[1]->span.flags & DAHDI_FLAG_RUNNING)))
+				||
+	    ((wc->numspans == 1) &&
+	    (!(wc->tspans[0]->span.flags & DAHDI_FLAG_RUNNING)))) {
 		/* No longer in use, disable interrupts */
 		dev_info(&wc->dev->dev, "TE%dXXP: Disabling interrupts since "
 				"there are no active spans\n", wc->numspans);
@@ -2914,9 +2923,11 @@ static int _t4_startup(struct file *file, struct dahdi_span *span)
 	if (wc->tspans[0]->sync == span->spanno)
 		dev_info(&wc->dev->dev, "SPAN %d: Primary Sync Source\n",
 				span->spanno);
-	if (wc->tspans[1]->sync == span->spanno)
-		dev_info(&wc->dev->dev, "SPAN %d: Secondary Sync Source\n",
-				span->spanno);
+	if (wc->numspans >= 2) {
+		if (wc->tspans[1]->sync == span->spanno)
+			dev_info(&wc->dev->dev, "SPAN %d: Secondary Sync Source"
+					"\n", span->spanno);
+	}
 	if (wc->numspans >= 4) {
 		if (wc->tspans[2]->sync == span->spanno)
 			dev_info(&wc->dev->dev, "SPAN %d: Tertiary Sync Source"
@@ -2981,7 +2992,9 @@ static inline void e1_check(struct t4 *wc, int span, int val)
 		if (ts->e1check > 100) {
 			/* Wait 1000 ms */
 			wc->e1recover = 1000 * 8;
-			wc->tspans[0]->e1check = wc->tspans[1]->e1check = 0;
+			wc->tspans[0]->e1check = 0;
+			if (wc->numspans >= 2)
+				wc->tspans[1]->e1check = 0;
 			if (wc->numspans == 4)
 				wc->tspans[2]->e1check = wc->tspans[3]->e1check = 0;
 			if (debug & DEBUG_MAIN)
@@ -4176,13 +4189,16 @@ static void t4_vpm_init(struct t4 *wc)
 	struct firmware embedded_firmware;
 	const struct firmware *firmware = &embedded_firmware;
 #if !defined(HOTPLUG_FIRMWARE)
+	extern void _binary_dahdi_fw_oct6114_032_bin_size;
 	extern void _binary_dahdi_fw_oct6114_064_bin_size;
 	extern void _binary_dahdi_fw_oct6114_128_bin_size;
 	extern void _binary_dahdi_fw_oct6114_256_bin_size;
+	extern u8 _binary_dahdi_fw_oct6114_032_bin_start[];
 	extern u8 _binary_dahdi_fw_oct6114_064_bin_start[];
 	extern u8 _binary_dahdi_fw_oct6114_128_bin_start[];
 	extern u8 _binary_dahdi_fw_oct6114_256_bin_start[];
 #else
+	static const char oct032_firmware[] = "dahdi-fw-oct6114-032.bin";
 	static const char oct064_firmware[] = "dahdi-fw-oct6114-064.bin";
 	static const char oct128_firmware[] = "dahdi-fw-oct6114-128.bin";
 	static const char oct256_firmware[] = "dahdi-fw-oct6114-256.bin";
@@ -4223,6 +4239,25 @@ static void t4_vpm_init(struct t4 *wc)
 	}
 
 	switch (vpm_capacity) {
+	case 32:
+#if defined(HOTPLUG_FIRMWARE)
+		if ((request_firmware(&firmware, oct032_firmware, &wc->dev->dev) != 0) ||
+		    !firmware) {
+			dev_notice(&wc->dev->dev, "VPM450: firmware %s not "
+				"available from userspace\n", oct032_firmware);
+			return;
+		}
+#else
+		embedded_firmware.data = _binary_dahdi_fw_oct6114_032_bin_start;
+		/* Yes... this is weird. objcopy gives us a symbol containing
+		   the size of the firmware, not a pointer a variable containing
+		   the size. The only way we can get the value of the symbol
+		   is to take its address, so we define it as a pointer and
+		   then cast that value to the proper type.
+	      */
+		embedded_firmware.size = (size_t) &_binary_dahdi_fw_oct6114_032_bin_size;
+#endif
+		break;
 	case 64:
 #if defined(HOTPLUG_FIRMWARE)
 		if ((request_firmware(&firmware, oct064_firmware, &wc->dev->dev) != 0) ||
@@ -5070,6 +5105,8 @@ t4_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 
 	if (is_octal(wc))
 		wc->numspans = 8;
+	else if (wc->devtype->flags & FLAG_1PORT)
+		wc->numspans = 1;
 	else if (wc->devtype->flags & FLAG_2PORT)
 		wc->numspans = 2;
 	else
@@ -5354,6 +5391,10 @@ static DEFINE_PCI_DEVICE_TABLE(t4_pci_tbl) =
 	{ 0xd161, 0x0210, 0x0003,     PCI_ANY_ID, 0, 0, (unsigned long)&wct210p3 },
 	{ 0xd161, 0x0205, PCI_ANY_ID, PCI_ANY_ID, 0, 0, (unsigned long)&wct205 },
 	{ 0xd161, 0x0210, PCI_ANY_ID, PCI_ANY_ID, 0, 0, (unsigned long)&wct210 },
+	/* OpenVox D115P/D115E */
+	{ 0x1b74, 0x0115, PCI_ANY_ID, PCI_ANY_ID, 0, 0, (unsigned long)&opvxd115p2 },
+	/* OpenVox D130P/D130E */
+	{ 0x1b74, 0xd130, PCI_ANY_ID, PCI_ANY_ID, 0, 0, (unsigned long)&opvxd130p5 },
 	{ 0, }
 };
 

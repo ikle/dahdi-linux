@@ -550,8 +550,8 @@ struct vpm450m *init_vpm450m(struct device *device, int *isalaw,
 
 	for (x = 0; x < ((8 == numspans) ? 256 : 128); x++) {
 		/* execute this loop always on 4 span cards but
-		*  on 2 span cards only execute for the channels related to our spans */
-		if (( numspans > 2) || ((x & 0x03) <2)) {
+		*  on 1/2 span cards only execute for the channels related to our spans */
+		if (( numspans > 2) || (((x & mask) < numspans))) {
 			/* span timeslots are interleaved 12341234... 
 		 	*  therefore, the lower 2 bits tell us which span this 
 			*  timeslot/channel
