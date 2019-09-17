@@ -56,6 +56,7 @@
 #define DAHDI_CONFIG_CCS	(1 << 8)			/* CCS (ISDN) instead of CAS (Robbed Bit) */
 #define DAHDI_CONFIG_HDB3	(1 << 9)			/* HDB3 instead of AMI (line coding) */
 #define DAHDI_CONFIG_CRC4	(1 << 10)			/* CRC4 framing */
+#define DAHDI_CONFIG_UNFRAMED	(1 << 15)
 #define DAHDI_CONFIG_NOTOPEN	(1 << 16)
 /* These apply to BRI */
 #define DAHDI_CONFIG_NTTE	(1 << 11)			/* To enable NT mode, set this bit to 1, for TE this should be 0 */
