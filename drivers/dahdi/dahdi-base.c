@@ -2573,6 +2573,11 @@ static ssize_t dahdi_chan_write(struct file *file, const char __user *usrbuf,
 	if (unlikely(!test_bit(DAHDI_FLAGBIT_REGISTERED, &chan->flags)))
 		return -ENODEV;
 
+	if (chan->flags & (DAHDI_FLAG_HDLC | DAHDI_FLAG_NOSTDTXRX)) {
+		if (unlikely(count > chan->blocksize))
+			return -EMSGSIZE;  /* HDLC frame too big */
+	}
+
 	for (;;) {
 		spin_lock_irqsave(&chan->lock, flags);
 		if ((chan->curtone || chan->pdialcount) && !is_pseudo_chan(chan)) {
