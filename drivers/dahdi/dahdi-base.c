@@ -6672,7 +6672,9 @@ static int dahdi_chan_ioctl(struct file *file, unsigned int cmd, unsigned long d
 		break;
 	case DAHDI_HDLCPPP:
 #ifdef CONFIG_DAHDI_PPP
-		if (chan->sig != DAHDI_SIG_CLEAR) return (-EINVAL);
+		if ((chan->sig & DAHDI_SIG_CLEAR) != DAHDI_SIG_CLEAR)
+			return -EINVAL;
+
 		get_user(j, (int __user *)data);
 		if (j) {
 			if (!chan->ppp) {
@@ -6710,7 +6712,10 @@ static int dahdi_chan_ioctl(struct file *file, unsigned int cmd, unsigned long d
 					chan->rxgain = defgain;
 					chan->txgain = defgain;
 					chan->flags &= ~DAHDI_FLAG_AUDIO;
-					chan->flags |= (DAHDI_FLAG_PPP | DAHDI_FLAG_HDLC | DAHDI_FLAG_FCS);
+					chan->flags |= DAHDI_FLAG_PPP;
+
+					if (chan->sig == DAHDI_SIG_CLEAR)
+						chan->flags |= (DAHDI_FLAG_HDLC | DAHDI_FLAG_FCS);
 
 					if (tec) {
 						tec->ops->echocan_free(chan, tec);
@@ -6720,7 +6725,11 @@ static int dahdi_chan_ioctl(struct file *file, unsigned int cmd, unsigned long d
 					return -ENOMEM;
 			}
 		} else {
-			chan->flags &= ~(DAHDI_FLAG_PPP | DAHDI_FLAG_HDLC | DAHDI_FLAG_FCS);
+			chan->flags &= ~DAHDI_FLAG_PPP;
+
+			if (chan->sig == DAHDI_SIG_CLEAR)
+				chan->flags &= ~(DAHDI_FLAG_HDLC | DAHDI_FLAG_FCS);
+
 			if (chan->ppp) {
 				struct ppp_channel *ppp = chan->ppp;
 				chan->ppp = NULL;
