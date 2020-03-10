@@ -4009,11 +4009,8 @@ void dahdi_alarm_notify(struct dahdi_span *span)
 	/* Determine maint status */
 	if (span->maintstat || span->mainttimer)
 		span->alarms |= DAHDI_ALARM_LOOPBACK;
-	/* DON'T CHANGE THIS AGAIN. THIS WAS DONE FOR A REASON.
- 	   The expression (a != b) does *NOT* do the same thing
-	   as ((!a) != (!b)) */
-	/* if change in general state */
-	if ((!span->alarms) != (!span->lastalarms)) {
+
+	if (span->alarms != span->lastalarms) {
 		span->lastalarms = span->alarms;
 		for (x = 0; x < span->channels; x++)
 			dahdi_alarm_channel(span->chans[x], span->alarms);
@@ -4024,17 +4021,20 @@ void dahdi_alarm_notify(struct dahdi_span *span)
 
 		/* Report more detailed alarms */
 		if (debug & DEBUG_MAIN) {
-			if (span->alarms & DAHDI_ALARM_LOS) {
+			if ((span->alarms     & DAHDI_ALARM_LOS) != 0 &&
+			    (span->lastalarms & DAHDI_ALARM_LOS) == 0) {
 				module_printk(KERN_NOTICE,
 					"Span %d: Loss of signal\n",
 					span->spanno);
 			}
-			if (span->alarms & DAHDI_ALARM_LFA) {
+			if ((span->alarms     & DAHDI_ALARM_LFA) != 0 &&
+			    (span->lastalarms & DAHDI_ALARM_LFA) == 0) {
 				module_printk(KERN_NOTICE,
 					"Span %d: Loss of Frame Alignment\n",
 					span->spanno);
 			}
-			if (span->alarms & DAHDI_ALARM_LMFA) {
+			if ((span->alarms     & DAHDI_ALARM_LMFA) != 0 &&
+			    (span->lastalarms & DAHDI_ALARM_LMFA) == 0) {
 				module_printk(KERN_NOTICE,
 					"Span %d: Loss of Multi-Frame "\
 					"Alignment\n", span->spanno);
