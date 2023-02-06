@@ -6378,19 +6378,28 @@ dahdi_chanandpseudo_ioctl(struct file *file, unsigned int cmd,
 static void do_ppp_calls(unsigned long data)
 {
 	struct dahdi_chan *chan = (struct dahdi_chan *) data;
+	unsigned long flags;
+	struct ppp_channel *ppp;
 	struct sk_buff *skb;
 
-	if (!chan->ppp)
+	spin_lock_irqsave(&chan->lock, flags);
+	ppp = chan->ppp;
+	spin_unlock_irqrestore(&chan->lock, flags);
+
+	if (ppp == NULL)
 		return;
+
 	if (chan->do_ppp_wakeup) {
 		chan->do_ppp_wakeup = 0;
-		ppp_output_wakeup(chan->ppp);
+		ppp_output_wakeup(ppp);
 	}
+
 	while ((skb = skb_dequeue(&chan->ppp_rq)) != NULL)
-		ppp_input(chan->ppp, skb);
+		ppp_input(ppp, skb);
+
 	if (chan->do_ppp_error) {
 		chan->do_ppp_error = 0;
-		ppp_input_error(chan->ppp, 0);
+		ppp_input_error(ppp, 0);
 	}
 }
 #endif
